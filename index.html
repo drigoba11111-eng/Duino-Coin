@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ᕲ Duino-Coin — minerador para GitHub Pages</title>
+  <meta name="description" content="Página estática que minera Duino-Coin no navegador pelo gateway WebSocket oficial do DUCO. Feita para rodar no GitHub Pages." />
+  <style>
+    :root {
+      --fundo: #0e1116; --fundo2: #161b22; --borda: #2a323d;
+      --texto: #e6edf3; --suave: #9aa7b4;
+      --azul: #3b82f6; --verde: #22c55e; --vermelho: #ef4444; --amarelo: #f59e0b;
+      --mono: "Cascadia Mono", Consolas, "Courier New", monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--fundo); color: var(--texto);
+           font: 15px/1.6 system-ui, "Segoe UI", Roboto, sans-serif; }
+    a { color: var(--azul); }
+    header { padding: 20px 24px 12px; border-bottom: 1px solid var(--borda);
+             background: linear-gradient(180deg, #131923, var(--fundo)); }
+    h1 { margin: 0 0 6px; font-size: 22px; }
+    h1 span { color: var(--suave); font-weight: 400; font-size: 16px; }
+    h2 { margin: 26px 0 10px; font-size: 18px; }
+    main { padding: 8px 24px 40px; max-width: 1040px; margin: 0 auto; }
+    .sub { margin: 0; max-width: 78ch; color: var(--suave); }
+    .pilula { display: inline-block; padding: 6px 12px; border-radius: 999px; font-size: 13px;
+              border: 1px solid var(--borda); background: var(--fundo2); white-space: nowrap; }
+    .pilula-ok { border-color: var(--verde); color: var(--verde); }
+    .pilula-erro { border-color: var(--vermelho); color: var(--vermelho); }
+    .pilula-espera { color: var(--amarelo); border-color: var(--amarelo); }
+    .cartao { background: var(--fundo2); border: 1px solid var(--borda);
+              border-radius: 12px; padding: 16px; margin: 0 0 16px; }
+    .grade { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    label.campo { display: block; margin: 0 0 12px; }
+    label.campo span { display: block; font-size: 13px; color: var(--suave); margin-bottom: 4px; }
+    input, select { width: 100%; padding: 9px 11px; border-radius: 9px; color: var(--texto);
+                    background: #0f141b; border: 1px solid var(--borda); font: inherit; }
+    input:focus, select:focus { outline: 2px solid var(--azul); outline-offset: 1px; }
+    button { padding: 10px 16px; border-radius: 9px; border: 1px solid var(--borda);
+             background: #1d2530; color: var(--texto); font: inherit; cursor: pointer; }
+    button:hover:not(:disabled) { border-color: var(--azul); }
+    button.principal { background: var(--verde); border-color: var(--verde); color: #05230f; font-weight: 600; }
+    button.perigo { background: var(--vermelho); border-color: var(--vermelho); color: #2b0505; font-weight: 600; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .botoes { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .metricas { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .metrica { background: #0f141b; border: 1px solid var(--borda); border-radius: 10px; padding: 10px 12px; }
+    .metrica small { display: block; color: var(--suave); font-size: 12px; }
+    .metrica b { font-family: var(--mono); font-size: 17px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--borda); }
+    th { color: var(--suave); font-weight: 500; font-size: 13px; }
+    td.num { font-family: var(--mono); }
+    #console { font-family: var(--mono); font-size: 13px; background: #0b0f14; border: 1px solid var(--borda);
+               border-radius: 10px; height: 260px; overflow-y: auto; padding: 10px; white-space: pre-wrap; }
+    #console .hora { color: #5b6675; }
+    #console .ok { color: var(--verde); } #console .erro { color: var(--vermelho); }
+    #console .aviso { color: var(--amarelo); } #console .info { color: var(--texto); }
+    .mini { font-size: 13px; color: var(--suave); }
+    .aviso { border-left: 3px solid var(--amarelo); padding: 8px 12px; background: #1a1508;
+             border-radius: 8px; font-size: 14px; }
+    code { font-family: var(--mono); background: #0f141b; padding: 1px 5px; border-radius: 5px; }
+    footer { border-top: 1px solid var(--borda); padding: 16px 24px; color: var(--suave); font-size: 13px; }
+    .oculto { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ᕲ Duino-Coin <span>— minerador para GitHub Pages</span></h1>
+    <p class="sub">
+      Página <strong>100% estática</strong> (cabe no GitHub Pages): a mineração roda no
+      <strong>navegador de quem abre a página</strong>, conversando com o gateway WebSocket
+      oficial do Duino-Coin — o mesmo que o web miner oficial usa. Não existe servidor:
+      é só HTML, CSS e JavaScript.
+    </p>
+    <p style="margin:12px 0 0"><span id="pilula" class="pilula pilula-espera">parado</span></p>
+  </header>
+
+  <main>
+    <div class="cartao">
+      <h2 style="margin-top:0">1. Configurar</h2>
+      <div class="grade">
+        <div>
+          <label class="campo"><span>Usuário do DUCO (obrigatório)</span>
+            <input id="usuario" placeholder="ex.: meu_usuario_duco" autocomplete="off" /></label>
+          <label class="campo"><span>Miner key (opcional — deixe vazio se não usa)</span>
+            <input id="minerkey" placeholder="None" autocomplete="off" /></label>
+          <label class="campo"><span>Identificador do minerador</span>
+            <input id="identificador" value="GitHubPages-WebPanel" /></label>
+        </div>
+        <div>
+          <label class="campo"><span>Dificuldade pedida</span>
+            <select id="dificuldade">
+              <option value="LOW" selected>LOW (recomendada para navegador)</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="NET">NET (máquinas parrudas)</option>
+            </select></label>
+          <label class="campo"><span>Trabalhadores (N conexões nesta aba)</span>
+            <input id="trabalhadores" type="number" min="1" max="8" value="2" /></label>
+          <label class="campo"><span>Gateway WebSocket</span>
+            <input id="endpoint" value="wss://magi.duinocoin.com:8443" /></label>
+        </div>
+      </div>
+      <div class="botoes">
+        <button id="btnIniciar" class="principal">⛏️ Iniciar mineração</button>
+        <button id="btnParar" class="perigo" disabled>⏹️ Parar</button>
+        <button id="btnConta">🔎 Checar conta e saldo</button>
+        <button id="btnMercado">💱 Atualizar cotações</button>
+        <button id="btnLimpar">🧹 Limpar dados salvos</button>
+      </div>
+      <p id="msg" class="mini" style="margin:10px 0 0"></p>
+    </div>
+
+    <div class="cartao">
+      <h2 style="margin-top:0">2. Ao vivo</h2>
+      <div class="metricas">
+        <div class="metrica"><small>Hashrate total</small><b id="iHashrate">0 H/s</b></div>
+        <div class="metrica"><small>Shares GOOD</small><b id="iGood">0</b></div>
+        <div class="metrica"><small>Shares BAD</small><b id="iBad">0</b></div>
+        <div class="metrica"><small>Aceitação</small><b id="iTaxa">—</b></div>
+        <div class="metrica"><small>Dificuldade do job</small><b id="iDiff">—</b></div>
+        <div class="metrica"><small>Último nonce</small><b id="iNonce">—</b></div>
+        <div class="metrica"><small>Latência do gateway</small><b id="iLat">—</b></div>
+        <div class="metrica"><small>Tempo de sessão</small><b id="iTempo">00:00:00</b></div>
+        <div class="metrica"><small>Saldo informado</small><b id="iSaldo">—</b></div>
+      </div>
+      <h3 class="mini" style="margin:18px 0 6px">Trabalhadores desta aba</h3>
+      <table>
+        <thead><tr><th>Trabalhador</th><th>Estado</th><th>Dificuldade</th><th>Hashrate</th><th>GOOD</th><th>BAD</th></tr></thead>
+        <tbody id="corpoTrabalhadores"><tr><td colspan="6" class="mini">nenhum trabalhador ativo</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="cartao">
+      <h2 style="margin-top:0">3. DUCO → dinheiro (estimativa)</h2>
+      <div class="grade">
+        <div>
+          <label class="campo"><span>DUCO acumulado</span>
+            <input id="convDuco" type="number" step="0.0001" value="1000" /></label>
+          <label class="campo"><span>Preço do DUCO em US$ (API oficial)</span>
+            <input id="convPreco" type="number" step="0.00000001" value="0.0000643" /></label>
+        </div>
+        <div>
+          <label class="campo"><span>US$ 1 em R$ (AwesomeAPI)</span>
+            <input id="convCambio" type="number" step="0.0001" value="5.1966" /></label>
+          <label class="campo"><span>Taxas de conversão/saque (%)</span>
+            <input id="convTaxa" type="number" step="0.1" value="3" /></label>
+        </div>
+      </div>
+      <div class="metricas">
+        <div class="metrica"><small>Bruto</small><b id="iBruto">—</b></div>
+        <div class="metrica"><small>Líquido (após taxas)</small><b id="iLiquido">—</b></div>
+        <div class="metrica"><small>Em reais</small><b id="iReais">—</b></div>
+      </div>
+      <p class="mini" id="projecao" style="margin:12px 0 0">
+        O código de mineração, o protocolo e a regra DUCO-S1A (SHA1 de
+        <code>lastBlockHash + nonce</code>) estão em <code>trabalhador.js</code>.
+      </p>
+      <p class="aviso" style="margin-top:12px">
+        ⚠️ <strong>Limites e regras:</strong> é o gateway oficial do DUCO que aceita ou recusa
+        os shares; o DUCO é uma moeda <em>for-fun</em> e o ganho em reais é muito pequeno.
+        Os <a href="https://github.com/duino-coin/duino-coin/blob/master/docs/ToS.md"
+        target="_blank" rel="noopener">Termos de Uso</a> proíbem contas alternativas, VPN/proxy,
+        VPS/cloud grátis e emulação de dispositivos — <strong>mine só com o hardware que você
+        tem</strong>, sob a sua conta. Abas em segundo plano são estranguladas pelo navegador:
+        manter a aba visível rende mais. Ao fechar a aba, a mineração para.
+      </p>
+    </div>
+
+    <div class="cartao">
+      <h2 style="margin-top:0">4. Registro</h2>
+      <div id="console"></div>
+    </div>
+  </main>
+
+  <footer>
+    <p>
+      <strong>Arquivos:</strong> <code>index.html</code> (esta página) e
+      <code>trabalhador.js</code> (Web Worker que minera) — os dois precisam ficar na mesma
+      pasta para funcionar. Nada é enviado a terceiros além dos pacotes de mineração para o
+      gateway oficial do Duino-Coin e das consultas de cotação.
+    </p>
+    <p>
+      🌐 <a href="https://server.duinocoin.com/webminer.html" target="_blank" rel="noopener">Web miner oficial</a>
+      · <a href="https://wallet.duinocoin.com" target="_blank" rel="noopener">Carteira oficial</a>
+      · <a href="https://github.com/duino-coin/duino-coin" target="_blank" rel="noopener">Código-fonte do DUCO</a>
+      · <a href="https://github.com/duino-coin/duino-coin/blob/master/docs/ToS.md" target="_blank" rel="noopener">Termos de Uso</a>
+    </p>
+    <p class="mini">
+      Feito para acompanhar o guia <em>“Minerando Criptomoedas com JavaScript — Do Zero ao
+      Dinheiro na Conta”</em>. Projeto didático, sem vínculo com o projeto Duino-Coin.
+    </p>
+  </footer>
+
+  <script>
+    /* ============================================================
+       Minerador Duino-Coin para GitHub Pages — parte da interface.
+       A mineração de verdade fica em trabalhador.js (Web Worker),
+       que fala com o gateway WebSocket oficial do DUCO:
+         wss://magi.duinocoin.com:8443
+       ============================================================ */
+    const $ = (id) => document.getElementById(id);
+
+    // --------------------------- formatação ---------------------------
+    const formatarHashrate = (h) => {
+      if (!h) return '0 H/s';
+      if (h >= 1e6) return `${(h / 1e6).toFixed(2)} MH/s`;
+      if (h >= 1e3) return `${(h / 1e3).toFixed(2)} kH/s`;
+      return `${Math.round(h)} H/s`;
+    };
+    const formatarNumero = (v, casas = 4) => (v === null || v === undefined || Number.isNaN(Number(v)))
+      ? '—'
+      : Number(v).toLocaleString('pt-BR', { maximumFractionDigits: casas });
+    const formatarDuco = (v) => (v === null || v === undefined ? '—' : `${formatarNumero(v, 4)} DUCO`);
+    const formatarBRL = (v) => (v === null || v === undefined || Number.isNaN(Number(v)))
+      ? '—'
+      : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // --------------------------- dados salvos ---------------------------
+    const CHAVE = 'ducoGithubPages';
+    const CAMPOS = ['usuario', 'minerkey', 'identificador', 'dificuldade', 'trabalhadores',
+      'endpoint', 'convDuco', 'convPreco', 'convCambio', 'convTaxa'];
+    let salvo = {};
+    try { salvo = JSON.parse(localStorage.getItem(CHAVE) || '{}'); } catch { salvo = {}; }
+
+    const salvar = () => {
+      const dados = {};
+      CAMPOS.forEach((c) => { dados[c] = $(c).value; });
+      try { localStorage.setItem(CHAVE, JSON.stringify(dados)); } catch { /* aba privada */ }
+    };
+
+    function carregar() {
+      CAMPOS.forEach((c) => { if (salvo[c]) $(c).value = salvo[c]; });
+      if (!$('identificador').value) $('identificador').value = 'GitHubPages-WebPanel';
+      if (!$('endpoint').value) $('endpoint').value = 'wss://magi.duinocoin.com:8443';
+      const nucleos = navigator.hardwareConcurrency || 2;
+      if (!$('trabalhadores').value) $('trabalhadores').value = Math.max(1, Math.min(4, nucleos));
+    }
+
+    // --------------------------- registro ---------------------------
+    function registrar(texto, nivel = 'info') {
+      const caixa = $('console');
+      const linha = document.createElement('div');
+      linha.className = nivel;
+      const hora = document.createElement('span');
+      hora.className = 'hora';
+      hora.textContent = `[${new Date().toLocaleTimeString('pt-BR')}] `;
+      linha.appendChild(hora);
+      linha.appendChild(document.createTextNode(texto));   // textContent: sem HTML dinâmico
+      caixa.appendChild(linha);
+      caixa.scrollTop = caixa.scrollHeight;
+      while (caixa.childElementCount > 400) caixa.removeChild(caixa.firstChild);
+    }
+    const avisar = (texto, erro = false) => {
+      const el = $('msg');
+      el.textContent = texto;
+      el.style.color = erro ? 'var(--vermelho)' : 'var(--suave)';
+    };
+    function pilula(classe, texto) {
+      const p = $('pilula');
+      p.className = `pilula pilula-${classe}`;
+      p.textContent = texto;
+    }
+
+    // --------------------------- mineração ---------------------------
+    let trabalhadores = [];            // { id, worker, estado, dificuldade, hashrate, good, bad }
+    let minerando = false;
+    let inicioSessao = 0;
+
+    const duracao = (ms) => {
+      const s = Math.floor(ms / 1000);
+      const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+      const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      return `${hh}:${mm}:${ss}`;
+    };
+
+    function desenharTabela() {
+      const corpo = $('corpoTrabalhadores');
+      while (corpo.firstChild) corpo.removeChild(corpo.firstChild);
+      if (!trabalhadores.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 6;
+        td.className = 'mini';
+        td.textContent = 'nenhum trabalhador ativo';
+        tr.appendChild(td);
+        corpo.appendChild(tr);
+        return;
+      }
+      trabalhadores.forEach((t) => {
+        const tr = document.createElement('tr');
+        const celulas = [`#${t.id}`, t.estado || '—', t.dificuldade ? String(t.dificuldade) : '—',
+          t.hashrate ? formatarHashrate(t.hashrate) : '—', String(t.good), String(t.bad)];
+        celulas.forEach((texto, i) => {
+          const td = document.createElement('td');
+          if (i > 0) td.className = 'num';
+          td.textContent = texto;
+          tr.appendChild(td);
+        });
+        corpo.appendChild(tr);
+      });
+    }
+
+    function atualizarTotais() {
+      const hashrate = trabalhadores.reduce((s, t) => s + (t.hashrate || 0), 0);
+      const good = trabalhadores.reduce((s, t) => s + t.good, 0);
+      const bad = trabalhadores.reduce((s, t) => s + t.bad, 0);
+      const difs = trabalhadores.map((t) => t.dificuldade).filter(Boolean);
+      const latencias = trabalhadores.map((t) => t.latencia).filter((v) => v !== undefined);
+      const nonces = trabalhadores.map((t) => t.nonce).filter((v) => v !== undefined);
+
+      $('iHashrate').textContent = formatarHashrate(hashrate);
+      $('iGood').textContent = String(good);
+      $('iBad').textContent = String(bad);
+      $('iTaxa').textContent = (good + bad) ? `${((good / (good + bad)) * 100).toFixed(1)}%` : '—';
+      $('iDiff').textContent = difs.length ? String(Math.max(...difs)) : '—';
+      $('iNonce').textContent = nonces.length ? String(nonces[nonces.length - 1]) : '—';
+      $('iLat').textContent = latencias.length ? `${Math.max(...latencias)} ms` : '—';
+      desenharTabela();
+      atualizarProjecao(good);
+    }
+
+    // --------------------------- mensagens do trabalhador ---------------------------
+    function mensagem(msg) {
+      if (msg.tipo === 'log') return registrar(msg.texto, msg.nivel);
+      if (msg.tipo === 'estado') return estadoTrabalhador(msg);
+      if (msg.tipo === 'progresso') return progresso(msg);
+      if (msg.tipo === 'share') return share(msg);
+      if (msg.tipo === 'job') return job(msg);
+      return undefined;
+    }
+
+    const porId = (id) => trabalhadores.find((t) => t.id === id) || trabalhadores[0] || null;
+
+    function estadoTrabalhador(msg) {
+      const t = porId(msg.worker);
+      if (!t) return;
+      t.estado = msg.estado;
+      if (msg.estado === 'erro' && msg.motivo) registrar(`Trabalhador #${t.id} parou: ${msg.motivo}`, 'erro');
+      if (msg.estado === 'conectado') pilula('ok', `conectado (${trabalhadores.length} trab.)`);
+      if (msg.estado === 'reconectando') pilula('espera', 'reconectando...');
+      atualizarTotais();
+    }
+
+    function progresso(msg) {                  // velocidade parcial durante a busca
+      const t = porId(msg.worker);
+      if (!t) return;
+      t.hashrate = (msg.nonce + 1) / (Math.max(1, msg.ms) / 1000);
+      t.dificuldade = msg.difficulty;
+      if (msg.latencia !== undefined) t.latencia = msg.latencia;
+      atualizarTotais();
+    }
+
+    function job(msg) {
+      const t = porId(msg.worker);
+      if (!t) return;
+      t.dificuldade = msg.difficulty;
+      if (msg.latencia !== undefined) t.latencia = msg.latencia;
+      if (msg.nonce !== undefined) {
+        t.nonce = msg.nonce;
+        t.hashrate = msg.hashrateDoJob || msg.hashrate || t.hashrate;
+      }
+      atualizarTotais();
+    }
+
+    function share(msg) {
+      const t = porId(msg.worker);
+      if (t) { if (msg.aceito) t.good++; else t.bad++; }
+      if (msg.saldo !== null && msg.saldo !== undefined) {
+        $('iSaldo').textContent = formatarDuco(msg.saldo);
+        $('convDuco').value = msg.saldo;
+      }
+      atualizarTotais();
+    }
+
+    // --------------------------- iniciar / parar ---------------------------
+    function iniciar() {
+      const usuario = $('usuario').value.trim();
+      if (!usuario) {
+        avisar('Informe o seu usuário do DUCO antes de minerar.', true);
+        $('usuario').focus();
+        return;
+      }
+      const quantos = Math.max(1, Math.min(8, Number($('trabalhadores').value) || 1));
+      const base = {
+        usuario,
+        minerKey: $('minerkey').value.trim() || 'None',
+        dificuldade: $('dificuldade').value,
+        identificador: $('identificador').value.trim() || 'GitHubPages-WebPanel',
+        endpoint: $('endpoint').value.trim() || 'wss://magi.duinocoin.com:8443',
+      };
+
+      parar(true);
+      trabalhadores = [];
+      minerando = true;
+      inicioSessao = Date.now();
+
+      for (let i = 1; i <= quantos; i++) {
+        const t = { id: i, worker: null, estado: 'iniciando', dificuldade: null, hashrate: 0, good: 0, bad: 0 };
+        try {
+          t.worker = new Worker('trabalhador.js');
+        } catch (e) {
+          registrar(`Não consegui abrir trabalhador.js (${e.message}). Ele precisa estar `
+            + 'na MESMA pasta do index.html.', 'erro');
+          avisar('Falta o arquivo trabalhador.js ao lado do index.html.', true);
+          break;
+        }
+        t.worker.onmessage = (ev) => mensagem(ev.data);
+        t.worker.onerror = (e) => registrar(`Erro no trabalhador #${i}: ${e.message || 'falha ao carregar o arquivo'}`, 'erro');
+        t.worker.postMessage({ tipo: 'iniciar', ...base, idTrabalhador: i });
+        trabalhadores.push(t);
+      }
+
+      if (!trabalhadores.length) { minerando = false; return; }
+      $('btnIniciar').disabled = true;
+      $('btnParar').disabled = false;
+      pilula('espera', 'conectando...');
+      avisar(`Mineração iniciada com ${trabalhadores.length} trabalhador(es) — mantenha esta aba aberta.`);
+      registrar(`Iniciando: usuário ${base.usuario} | dificuldade ${base.dificuldade} | `
+        + `${trabalhadores.length} trabalhador(es) | gateway ${base.endpoint}`, 'info');
+      atualizarTotais();
+    }
+
+    function parar(silencioso = false) {
+      trabalhadores.forEach((t) => {
+        if (!t.worker) return;
+        try { t.worker.postMessage({ tipo: 'parar' }); } catch { /* já morreu */ }
+        setTimeout(() => { try { t.worker.terminate(); } catch { /* ok */ } }, 300);
+      });
+      if (!silencioso && trabalhadores.length) {
+        const good = trabalhadores.reduce((s, t) => s + t.good, 0);
+        const bad = trabalhadores.reduce((s, t) => s + t.bad, 0);
+        registrar(`Sessão encerrada: ${good} share(s) GOOD e ${bad} BAD`
+          + `${inicioSessao ? ` em ${duracao(Date.now() - inicioSessao)}` : ''}.`, 'aviso');
+      }
+      trabalhadores = [];
+      minerando = false;
+      $('btnIniciar').disabled = false;
+      $('btnParar').disabled = true;
+      pilula('espera', 'parado');
+      atualizarTotais();
+    }
+
+    // --------------------------- APIs oficiais (têm CORS liberado) ---------------------------
+    const API = 'https://server.duinocoin.com';
+
+    async function pedir(url) {
+      const resp = await fetch(url, { cache: 'no-store' });
+      const texto = await resp.text();
+      try { return { ok: resp.ok, status: resp.status, dados: JSON.parse(texto) }; }
+      catch { throw new Error(`resposta inesperada (${resp.status})`); }
+    }
+
+    async function checarConta() {
+      const usuario = $('usuario').value.trim();
+      if (!usuario) { avisar('Informe o usuário para consultar o saldo.', true); return; }
+      avisar('consultando a API oficial...');
+      try {
+        const { ok, status, dados } = await pedir(`${API}/balances/${encodeURIComponent(usuario)}`);
+        if (!ok || !dados.success || !dados.result) {
+          avisar(`A conta "${usuario}" não foi encontrada (HTTP ${status}).`, true);
+          registrar(`Consulta da conta "${usuario}": não encontrada.`, 'erro');
+          return;
+        }
+        const r = dados.result;
+        $('iSaldo').textContent = formatarDuco(r.balance);
+        $('convDuco').value = r.balance;
+        salvar();
+        calcularConversao();
+        avisar(`Conta "${usuario}": ${formatarDuco(r.balance)} | verificada: `
+          + `${r.verified === 'yes' ? 'sim' : 'não'} | miners registrados: ${r.miners ? r.miners.length : '—'}`);
+        registrar(`Conta confirmada: ${formatarDuco(r.balance)} | trust score ${r.trust_score}`
+          + ` | criada em ${r.created}`, 'ok');
+      } catch (e) {
+        avisar(`Falha ao consultar a conta: ${e.message}`, true);
+      }
+    }
+
+    async function atualizarMercado() {
+      avisar('consultando as cotações...');
+      try {
+        const [stats, cambio] = await Promise.all([
+          pedir(`${API}/statistics`),
+          pedir('https://economia.awesomeapi.com.br/last/USD-BRL'),
+        ]);
+        const preco = Number(stats.dados['Duco price']) || 0;
+        const usdBrl = Number(cambio.dados.USDBRL && cambio.dados.USDBRL.bid) || 0;
+        if (preco) $('convPreco').value = preco;
+        if (usdBrl) $('convCambio').value = usdBrl;
+        salvar();
+        calcularConversao();
+        avisar(`DUCO = US$ ${preco.toFixed(8)} | US$ 1 = R$ ${usdBrl.toFixed(4)}`);
+        registrar(`Mercado: dificuldade da rede ${stats.dados['Current difficulty']} | `
+          + `pool ${stats.dados['Pool hashrate']} | ${stats.dados['Mined blocks']} blocos minerados`, 'ok');
+      } catch (e) {
+        avisar(`Não consegui as cotações (${e.message}). Digite os valores à mão.`, true);
+      }
+    }
+
+    // --------------------------- conversão e projeção ---------------------------
+    function calcularConversao() {
+      const qtd = Number($('convDuco').value) || 0;
+      const preco = Number($('convPreco').value) || 0;
+      const cambio = Number($('convCambio').value) || 0;
+      const taxa = Number($('convTaxa').value) || 0;
+
+      const brutoUsd = qtd * preco;
+      const liquidoUsd = brutoUsd * (1 - taxa / 100);
+      const liquidoBrl = liquidoUsd * cambio;
+
+      $('iBruto').textContent = brutoUsd ? `US$ ${brutoUsd.toFixed(4)}` : '—';
+      $('iLiquido').textContent = liquidoUsd ? `US$ ${liquidoUsd.toFixed(4)}` : '—';
+      $('iReais').textContent = liquidoBrl ? formatarBRL(liquidoBrl) : '—';
+    }
+
+    // Sem inventar DUCO/h: mostramos o que foi medido de verdade (shares e hashrate)
+    function atualizarProjecao(good) {
+      const hashrate = trabalhadores.reduce((s, t) => s + (t.hashrate || 0), 0);
+      const minutos = inicioSessao ? (Date.now() - inicioSessao) / 60000 : 0;
+
+      if (!minerando || !good || minutos <= 0.5) {
+        $('projecao').textContent = 'O valor acima é só uma estimativa sobre o DUCO que você informar:'
+          + ' o preço, a dificuldade e o prêmio por share mudam, e o saldo real só aparece na'
+          + ' carteira oficial.';
+        return;
+      }
+      $('projecao').textContent = `Medido nesta sessão: ${good} share(s) aceito(s) em `
+        + `${minutos.toFixed(1)} min com ${formatarHashrate(hashrate)} — `
+        + `${(good / minutos).toFixed(2)} share(s) por minuto. O DUCO por share é definido pela rede,`
+        + ' então confirme o ganho real na carteira oficial.';
+    }
+
+    // --------------------------- eventos ---------------------------
+    CAMPOS.forEach((campo) => {
+      $(campo).addEventListener('input', () => {
+        salvar();
+        if (campo.startsWith('conv')) calcularConversao();
+      });
+    });
+    $('dificuldade').addEventListener('change', salvar);
+    $('btnIniciar').addEventListener('click', iniciar);
+    $('btnParar').addEventListener('click', () => parar());
+    $('btnConta').addEventListener('click', checarConta);
+    $('btnMercado').addEventListener('click', atualizarMercado);
+    $('btnLimpar').addEventListener('click', () => {
+      try { localStorage.removeItem(CHAVE); } catch { /* aba privada */ }
+      registrar('Dados salvos apagados: nada mais fica guardado neste navegador.', 'aviso');
+      avisar('Preferências apagadas.');
+    });
+
+    // Relógio da sessão enquanto a mineração roda
+    setInterval(() => {
+      if (!minerando) return;
+      $('iTempo').textContent = duracao(Date.now() - inicioSessao);
+      atualizarProjecao(trabalhadores.reduce((s, t) => s + t.good, 0));
+    }, 1000);
+
+    // O navegador estrangula o JavaScript de abas escondidas: avisamos o usuário
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && minerando) {
+        registrar('Aba em segundo plano: o navegador reduz a velocidade da mineração.', 'aviso');
+      }
+    });
+
+    window.addEventListener('beforeunload', () => { if (minerando) parar(true); });
+
+    // --------------------------- início ---------------------------
+    carregar();
+    calcularConversao();
+    desenharTabela();
+    registrar('Página carregada — GitHub Pages é estático: a mineração roda no SEU navegador.', 'ok');
+    registrar('Confira os Termos de Uso do DUCO antes de minerar: sem VPN, sem VPS grátis, uma conta só.', 'aviso');
+  </script>
+</body>
+</html>
