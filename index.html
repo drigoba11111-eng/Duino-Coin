@@ -382,7 +382,7 @@
         $('usuario').focus();
         return;
       }
-      const quantos = Math.max(1, Math.min(8, Number($('trabalhadores').value) || 1));
+      const quantos = Math.max(1, Math.min(50, Number($('trabalhadores').value) || 1));
       const base = {
         usuario,
         minerKey: $('minerkey').value.trim() || 'None',
