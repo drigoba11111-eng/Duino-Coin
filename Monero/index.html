@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monero — minerador no navegador (RandomX/WASM)</title>
+<style>
+  :root {
+    --fundo: #10131a; --painel: #181d27; --painel2: #1f2530; --borda: #2a3241;
+    --texto: #e6ecf2; --fraco: #8b98a9; --laranja: #ff6600;
+    --verde: #3ddc84; --vermelho: #ff5c57; --azul: #4aa8ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 18px; background: var(--fundo); color: var(--texto);
+         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h1 span { color: var(--laranja); }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--fraco); font-weight: 600;
+       text-transform: uppercase; letter-spacing: .06em; }
+  .grade { display: grid; gap: 14px; grid-template-columns: 1fr; max-width: 1100px; margin: 0 auto; }
+  @media (min-width: 900px) { .grade { grid-template-columns: 380px 1fr; } }
+  .cartao { background: var(--painel); border: 1px solid var(--borda); border-radius: 12px; padding: 14px; }
+  label { display: block; font-size: 13px; color: var(--fraco); margin: 10px 0 4px; }
+  input, select { width: 100%; padding: 9px 10px; font-size: 14px; color: var(--texto);
+                  background: var(--painel2); border: 1px solid var(--borda); border-radius: 8px; }
+  input:focus, select:focus { outline: 1px solid var(--laranja); }
+  .linha { display: flex; gap: 10px; }
+  .linha > * { flex: 1; }
+  button { width: 100%; margin-top: 14px; padding: 11px; font-size: 15px; font-weight: 600;
+           color: #14181f; background: var(--laranja); border: 0; border-radius: 8px; cursor: pointer; }
+  button:hover { filter: brightness(1.08); }
+  button.parar { background: var(--vermelho); }
+  .aviso { border-color: #4a3a1a; background: #241c0d; color: #ffd79a; font-size: 13px; line-height: 1.5; }
+  .aviso b { color: #ffb84d; }
+  .numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .numero { background: var(--painel2); border-radius: 10px; padding: 10px 12px; }
+  .numero small { display: block; color: var(--fraco); font-size: 11px; text-transform: uppercase; }
+  .numero b { font-size: 19px; }
+  .estado { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .estado.parado { background: #2b3240; color: var(--fraco); }
+  .estado.conectando, .estado.reconectando { background: #3a3418; color: #ffd05c; }
+  .estado.conectado { background: #14351f; color: var(--verde); }
+  .estado.erro { background: #3b1a19; color: var(--vermelho); }
+  #log { height: 260px; overflow-y: auto; background: #0b0e13; border: 1px solid var(--borda);
+         border-radius: 10px; padding: 10px; font: 12px/1.55 Consolas, "Courier New", monospace;
+         white-space: pre-wrap; word-break: break-word; }
+  #log .h { color: var(--fraco); }
+  #log .ok { color: var(--verde); }
+  #log .aviso { background: none; border: 0; color: #ffd05c; }
+  #log .erro { color: var(--vermelho); }
+  #log .worker { color: var(--azul); }
+  .rodape { color: var(--fraco); font-size: 12px; line-height: 1.6; max-width: 1100px; margin: 14px auto 0; }
+  code { background: var(--painel2); padding: 1px 5px; border-radius: 5px; }
+</style>
+</head>
+<body>
+<div class="grade">
+
+  <!-- ================= coluna esquerda: configuração ================= -->
+  <div>
+    <h1><span>⛏</span> Monero no navegador</h1>
+    <p class="rodape" style="margin:0 0 12px">RandomX (WebAssembly) rodando na sua máquina, pagando direto para a sua carteira.</p>
+
+    <div class="cartao aviso">
+      <b>Antes de começar — leia:</b><br>
+      • RandomX dentro do navegador rende <b>~10 H/s por núcleo</b> (o xmrig nativo faz ~100× isso).<br>
+      • Com essa potência, achar um share leva <b>minutos</b> e o valor recebido é <b>centavos</b>.<br>
+      • Use <b>a sua própria carteira</b>: o pool paga o endereço informado, não existe intermediário aqui.<br>
+      • Este painel precisa da <code>ponte.js</code> local — o navegador não fala TCP direto com o pool.
+    </div>
+
+    <div class="cartao" style="margin-top:14px">
+      <h2>Configuração</h2>
+
+      <label for="endereco">Endereço da carteira Monero (começa com 4)</label>
+      <input id="endereco" spellcheck="false" autocomplete="off"
+             placeholder="4.......................................">
+      <div id="avisoEndereco" class="rodape" style="margin:4px 0 0"></div>
+
+      <label for="pool">Pool</label>
+      <select id="pool">
+        <option value="gulf.moneroocean.stream:10001">MoneroOcean — gulf.moneroocean.stream:10001 (rx/0)</option>
+        <option value="pool.supportxmr.com:3333">SupportXMR — pool.supportxmr.com:3333 (rx/0)</option>
+        <option value="outro">outro (digitar abaixo)</option>
+      </select>
+      <div class="linha" id="poolManual" style="display:none">
+        <input id="poolHost" placeholder="host do pool">
+        <input id="poolPorta" placeholder="porta" style="max-width:110px">
+      </div>
+
+      <label for="ponte">Endereço da ponte (WebSocket local)</label>
+      <input id="ponte" value="ws://127.0.0.1:8080/ws" spellcheck="false">
+
+      <label for="trabalhadores">Quantidade de trabalhadores (núcleos)</label>
+      <select id="trabalhadores">
+        <option value="1">1 (mais leve)</option>
+        <option value="2" selected>2</option>
+        <option value="4">4</option>
+        <option value="6">6</option>
+        <option value="8">8</option>
+      </select>
+
+      <button id="botao">Iniciar mineração</button>
+      <div class="rodape" id="dicaPonte" style="margin:8px 0 0"></div>
+    </div>
+  </div>
+
+  <!-- ================= coluna direita: painel ================= -->
+  <div class="cartao">
+    <h2>Painel <span id="estado" class="estado parado">parado</span></h2>
+
+    <div class="numeros">
+      <div class="numero"><small>Hashrate total</small><b id="hashrate">0,0 H/s</b></div>
+      <div class="numero"><small>Shares bons</small><b id="bons" style="color:var(--verde)">0</b></div>
+      <div class="numero"><small>Shares recusados</small><b id="maus" style="color:var(--vermelho)">0</b></div>
+      <div class="numero"><small>Dificuldade</small><b id="dificuldade">—</b></div>
+      <div class="numero"><small>Altura do bloco</small><b id="altura">—</b></div>
+      <div class="numero"><small>Latência</small><b id="latencia">—</b></div>
+      <div class="numero"><small>Rodando há</small><b id="tempo">0 s</b></div>
+    </div>
+
+    <h2 style="margin-top:16px">Registro</h2>
+    <div id="log"></div>
+
+    <div class="rodape">
+      O que acontece por baixo: cada trabalhador monta o blob do bloco, escreve o nonce (4 bytes
+      little-endian) na posição que o pool usa, calcula o <b>RandomX</b> desse blob e compara com o
+      alvo — quando o hash (lido como inteiro little-endian de 256 bits) fica abaixo de
+      <code>alvo &lt;&lt; (256 − 8·bytes)</code>, o share vai para o pool.
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===========================================================================
+ * Painel do minerador: fala com o trabalhador.js (Web Worker) e cuida da tela.
+ * Toda a inteligência (endereço, stratum, RandomX, alvo) está no trabalhador.
+ * ======================================================================== */
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+const elementos = {
+  endereco: $('endereco'), avisoEndereco: $('avisoEndereco'), pool: $('pool'),
+  poolManual: $('poolManual'), poolHost: $('poolHost'), poolPorta: $('poolPorta'),
+  ponte: $('ponte'), trabalhadores: $('trabalhadores'), botao: $('botao'),
+  dicaPonte: $('dicaPonte'), estado: $('estado'), hashrate: $('hashrate'),
+  bons: $('bons'), maus: $('maus'), dificuldade: $('dificuldade'),
+  altura: $('altura'), latencia: $('latencia'), tempo: $('tempo'), log: $('log'),
+};
+
+let trabalhadores = [];       // os Workers ativos
+let rodando = false;
+let inicio = 0;
+let bons = 0;
+let maus = 0;
+const hashrates = new Map();  // idTrabalhador -> H/s do último segundo
+let relogioUptime = null;
+let relogioHashrate = null;
+
+// ---------- tela ----------
+function escrever(texto, classe = '') {
+  const linha = document.createElement('div');
+  if (classe) linha.className = classe;
+  const hora = new Date().toTimeString().slice(0, 8);
+  linha.textContent = `[${hora}] ${texto}`;
+  elementos.log.appendChild(linha);
+  while (elementos.log.childElementCount > 300) elementos.log.removeChild(elementos.log.firstChild);
+  elementos.log.scrollTop = elementos.log.scrollHeight;
+}
+const numero = (v, casas = 2) => Number(v).toLocaleString('pt-BR',
+  { minimumFractionDigits: casas, maximumFractionDigits: casas });
+
+function mudarEstado(valor, motivo) {
+  elementos.estado.className = `estado ${valor}`;
+  const rotulos = {
+    parado: 'parado', conectando: 'conectando…', conectado: 'conectado',
+    reconectando: 'reconectando…', erro: 'erro',
+  };
+  elementos.estado.textContent = rotulos[valor] || valor;
+  if (motivo) escrever(motivo, 'erro');
+}
+
+// ---------- preferências ----------
+function salvarPreferencias() {
+  try {
+    localStorage.setItem('monero-painel', JSON.stringify({
+      endereco: elementos.endereco.value.trim(),
+      pool: elementos.pool.value,
+      poolHost: elementos.poolHost.value.trim(),
+      poolPorta: elementos.poolPorta.value.trim(),
+      ponte: elementos.ponte.value.trim(),
+      trabalhadores: elementos.trabalhadores.value,
+    }));
+  } catch { /* janela privada: segue sem salvar */ }
+}
+function carregarPreferencias() {
+  try {
+    const salvo = JSON.parse(localStorage.getItem('monero-painel') || '{}');
+    if (salvo.endereco) elementos.endereco.value = salvo.endereco;
+    if (salvo.pool) elementos.pool.value = salvo.pool;
+    if (salvo.poolHost) elementos.poolHost.value = salvo.poolHost;
+    if (salvo.poolPorta) elementos.poolPorta.value = salvo.poolPorta;
+    if (salvo.ponte) elementos.ponte.value = salvo.ponte;
+    if (salvo.trabalhadores) elementos.trabalhadores.value = salvo.trabalhadores;
+  } catch { /* ignora */ }
+}
+
+// ---------- conferência rápida do endereço (a definitiva é dentro do trabalhador) ----------
+function conferirEndereco() {
+  const valor = elementos.endereco.value.trim();
+  if (!valor) { elementos.avisoEndereco.textContent = ''; return; }
+  if (valor.length !== 95) {
+    elementos.avisoEndereco.innerHTML = `<span style="color:var(--vermelho)">${valor.length} caracteres — um endereço Monero tem 95.</span>`;
+    return;
+  }
+  if (!valor.startsWith('4')) {
+    elementos.avisoEndereco.innerHTML = '<span style="color:var(--vermelho)">endereço Monero começa com 4 (o integrado, que começa com 9, os pools não aceitam).</span>';
+    return;
+  }
+  elementos.avisoEndereco.innerHTML = '<span style="color:var(--verde)">formato ok — o checksum é conferido pelo trabalhador.</span>';
+}
+
+function hostPorta() {
+  if (elementos.pool.value === 'outro') {
+    return { host: elementos.poolHost.value.trim(), porta: Number(elementos.poolPorta.value.trim()) };
+  }
+  const [host, porta] = elementos.pool.value.split(':');
+  return { host, porta: Number(porta) };
+}
+
+// ---------- ligar / desligar ----------
+function ligar() {
+  const endereco = elementos.endereco.value.trim();
+  const { host, porta } = hostPorta();
+  const ponte = elementos.ponte.value.trim();
+  const quantos = Number(elementos.trabalhadores.value);
+
+  if (!endereco || endereco.length !== 95) { escrever('informe um endereço Monero de 95 caracteres.', 'erro'); return; }
+  if (!host || !porta) { escrever('escolha (ou digite) o pool e a porta.', 'erro'); return; }
+  if (!ponte.startsWith('ws')) { escrever('a ponte precisa começar com ws:// (ex.: ws://127.0.0.1:8080/ws).', 'erro'); return; }
+
+  salvarPreferencias();
+  rodando = true;
+  bons = 0; maus = 0; hashrates.clear();
+  inicio = Date.now();
+  elementos.bons.textContent = '0';
+  elementos.maus.textContent = '0';
+  elementos.botao.textContent = 'Parar mineração';
+  elementos.botao.classList.add('parar');
+  elementos.dicaPonte.innerHTML = 'A ponte precisa estar no ar — na pasta do projeto rode <code>node ponte.js</code>.';
+  escrever(`iniciando ${quantos} trabalhador(es) em ${host}:${porta} pela ponte ${ponte}`, 'ok');
+  escrever('o primeiro job de cada trabalhador leva ~1 s: é o cache de 256 MB do RandomX sendo montado.', 'aviso');
+
+  for (let i = 0; i < quantos; i++) {
+    const w = new Worker('trabalhador.js');
+    w.onmessage = (evento) => tratarMensagem(evento.data || {});
+    w.onerror = (e) => escrever(`trabalhador ${i + 1}: erro no Worker — ${e.message || 'sem detalhes'}`, 'erro');
+    trabalhadores.push(w);
+    w.postMessage({
+      tipo: 'iniciar', endereco, senha: 'x', ponte,
+      poolHost: host, poolPort: porta,
+      identificador: 'Panel-Monero-WASM', idTrabalhador: i + 1,
+    });
+  }
+
+  clearInterval(relogioUptime);
+  relogioUptime = setInterval(atualizarTempo, 1000);
+  clearInterval(relogioHashrate);
+  relogioHashrate = setInterval(atualizarHashrate, 1500);
+}
+
+function desligar(motivo) {
+  rodando = false;
+  clearInterval(relogioUptime);
+  clearInterval(relogioHashrate);
+  for (const w of trabalhadores) { try { w.postMessage({ tipo: 'parar' }); } catch { /* já morreu */ } }
+  // dá um instante para o hash em andamento terminar e aí fecha os Workers
+  setTimeout(() => { for (const w of trabalhadores) { try { w.terminate(); } catch { /* já morreu */ } } }, 800);
+  trabalhadores = [];
+  hashrates.clear();
+  elementos.hashrate.textContent = '0,0 H/s';
+  elementos.botao.textContent = 'Iniciar mineração';
+  elementos.botao.classList.remove('parar');
+  mudarEstado('parado');
+  escrever(motivo || 'mineração parada.', 'aviso');
+}
+
+// ---------- mensagens que chegam dos trabalhadores ----------
+function tratarMensagem(msg) {
+  switch (msg.tipo) {
+    case 'log': {
+      const cor = msg.nivel === 'erro' ? 'erro' : msg.nivel === 'aviso' ? 'aviso'
+        : msg.nivel === 'ok' ? 'ok' : '';
+      escrever(`[${msg.worker || '-'}] ${msg.texto}`, cor);
+      break;
+    }
+    case 'estado':
+      mudarEstado(msg.estado, msg.motivo);
+      break;
+    case 'job':
+      elementos.dificuldade.textContent = msg.dificuldade ? numero(msg.dificuldade, 0) : '—';
+      if (msg.altura !== null && msg.altura !== undefined) elementos.altura.textContent = msg.altura;
+      break;
+    case 'progresso':
+      hashrates.set(msg.worker, msg.hashrate);
+      if (msg.latencia) elementos.latencia.textContent = `${msg.latencia} ms`;
+      break;
+    case 'share':
+      if (msg.aceito) { bons++; elementos.bons.textContent = bons; }
+      else { maus++; elementos.maus.textContent = maus; }
+      break;
+  }
+}
+
+function atualizarHashrate() {
+  let total = 0;
+  for (const valor of hashrates.values()) total += valor;
+  elementos.hashrate.textContent = `${numero(total, 1)} H/s`;
+}
+
+function atualizarTempo() {
+  if (!inicio) return;
+  const s = Math.floor((Date.now() - inicio) / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  elementos.tempo.textContent = h ? `${h} h ${m} min` : (m ? `${m} min ${s % 60} s` : `${s} s`);
+}
+
+// ---------- ligações na tela ----------
+elementos.botao.addEventListener('click', () => {
+  if (rodando) desligar(); else ligar();
+});
+elementos.endereco.addEventListener('input', conferirEndereco);
+elementos.pool.addEventListener('change', () => {
+  elementos.poolManual.style.display = elementos.pool.value === 'outro' ? 'flex' : 'none';
+  salvarPreferencias();
+});
+for (const campo of ['poolHost', 'poolPorta', 'ponte', 'trabalhadores']) {
+  elementos[campo].addEventListener('change', salvarPreferencias);
+}
+window.addEventListener('beforeunload', () => {
+  for (const w of trabalhadores) { try { w.terminate(); } catch { /* já morreu */ } }
+});
+
+// ---------- parâmetros na URL (link pronto / teste automatizado) ----------
+// ?endereco=4...&pool=host:porta&ponte=ws://127.0.0.1:8080/ws&trabalhadores=2&auto=1
+function lerParametrosDaUrl() {
+  const p = new URLSearchParams(location.search);
+  if (p.get('endereco')) elementos.endereco.value = p.get('endereco').trim();
+  if (p.get('ponte')) elementos.ponte.value = p.get('ponte').trim();
+  if (p.get('trabalhadores')) elementos.trabalhadores.value = p.get('trabalhadores');
+
+  const pool = (p.get('pool') || '').trim();
+  if (/^[A-Za-z0-9.\-]+:\d+$/.test(pool)) {
+    if ([...elementos.pool.options].some((o) => o.value === pool)) {
+      elementos.pool.value = pool;
+    } else {
+      const [host, porta] = pool.split(':');
+      elementos.pool.value = 'outro';
+      elementos.poolHost.value = host;
+      elementos.poolPorta.value = porta;
+      elementos.poolManual.style.display = 'flex';
+    }
+  }
+
+  if (p.get('auto') === '1') {
+    escrever('a URL pediu auto=1: começando sozinho.', 'aviso');
+    setTimeout(ligar, 300);
+  }
+}
+
+carregarPreferencias();
+conferirEndereco();
+lerParametrosDaUrl();
+escrever('pronto. Informe o endereço da carteira, escolha o pool e clique em iniciar.', 'h');
+escrever('sem a ponte no ar, o painel avisa "a ponte caiu" em poucos segundos.', 'h');
+</script>
+</body>
+</html>
