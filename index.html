@@ -62,18 +62,91 @@
     code { font-family: var(--mono); background: #0f141b; padding: 1px 5px; border-radius: 5px; }
     footer { border-top: 1px solid var(--borda); padding: 16px 24px; color: var(--suave); font-size: 13px; }
     .oculto { display: none; }
+
+    /* ---------- cotação do dólar no cabeçalho ---------- */
+    .topo { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; }
+    .topo-texto { flex: 1 1 420px; }
+    .dolar { flex: 0 1 460px; display: grid; gap: 12px; grid-template-columns: 1fr 1fr;
+             background: #0b1320; border: 2px solid var(--azul); border-radius: 14px; padding: 14px 16px;
+             box-shadow: 0 0 24px rgba(59,130,246,.25); }
+    .dolar-cotacao small, .dolar-alerta > small { display: block; font-size: 12px; color: var(--suave);
+             text-transform: uppercase; letter-spacing: .06em; }
+    .dolar-par { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 4px; }
+    .dolar-rotulo { font-size: 12px; color: var(--suave); font-weight: 600; }
+    .dolar-valor { font-family: var(--mono); font-size: 30px; font-weight: 700; line-height: 1.1; color: #fff; }
+    .dolar-valor.referencia { color: var(--amarelo); }
+    .dolar { flex-basis: 560px; grid-template-columns: 1.3fr 1fr; }
+    .dolar-var { font-family: var(--mono); font-size: 14px; font-weight: 600; }
+    .dolar-var.sobe { color: var(--verde); } .dolar-var.desce { color: var(--vermelho); }
+    .dolar-hora { font-size: 12px; color: var(--suave); }
+    .dolar-alerta { border-left: 1px solid var(--borda); padding-left: 14px; }
+    .dolar-alerta .linha { display: flex; gap: 6px; margin-top: 6px; }
+    .dolar-alerta select { width: auto; padding: 8px 6px; }
+    .dolar-alerta input { font-family: var(--mono); font-size: 20px; font-weight: 700; padding: 6px 10px;
+             border: 2px solid var(--amarelo); color: var(--amarelo); }
+    .dolar-alerta .botoes { margin-top: 8px; }
+    .dolar-alerta button { padding: 7px 12px; font-size: 13px; }
+    .dolar-estado { font-size: 12px; margin-top: 6px; color: var(--suave); }
+    .alerta-disparado { position: sticky; top: 0; z-index: 10; padding: 14px 24px; text-align: center;
+             font-size: 22px; font-weight: 800; color: #fff; background: var(--vermelho);
+             animation: piscar 1s infinite; }
+    .alerta-disparado button { margin-left: 16px; background: #fff; color: #7f1d1d; font-weight: 700; border: 0; }
+    .dolar.disparou { border-color: var(--vermelho); animation: piscar 1s infinite; }
+    @keyframes piscar { 50% { filter: brightness(1.5); box-shadow: 0 0 34px rgba(239,68,68,.8); } }
+    @media (max-width: 560px) {
+      .dolar { grid-template-columns: 1fr; }
+      .dolar-alerta { border-left: 0; padding-left: 0; border-top: 1px solid var(--borda); padding-top: 10px; }
+    }
   </style>
 </head>
 <body>
+  <div id="faixaAlerta" class="alerta-disparado oculto" role="alert">
+    <span id="faixaTexto"></span>
+    <button id="btnDispensar">OK, dispensar</button>
+  </div>
   <header>
-    <h1>ᕲ Duino-Coin <span>— minerador para GitHub Pages</span></h1>
-    <p class="sub">
-      Página <strong>100% estática</strong> (cabe no GitHub Pages): a mineração roda no
-      <strong>navegador de quem abre a página</strong>, conversando com o gateway WebSocket
-      oficial do Duino-Coin — o mesmo que o web miner oficial usa. Não existe servidor:
-      é só HTML, CSS e JavaScript.
-    </p>
-    <p style="margin:12px 0 0"><span id="pilula" class="pilula pilula-espera">parado</span></p>
+    <div class="topo">
+      <div class="topo-texto">
+        <h1>ᕲ Duino-Coin <span>— minerador para GitHub Pages</span></h1>
+        <p class="sub">
+          Página <strong>100% estática</strong> (cabe no GitHub Pages): a mineração roda no
+          <strong>navegador de quem abre a página</strong>, conversando com o gateway WebSocket
+          oficial do Duino-Coin — o mesmo que o web miner oficial usa. Não existe servidor:
+          é só HTML, CSS e JavaScript.
+        </p>
+        <p style="margin:12px 0 0"><span id="pilula" class="pilula pilula-espera">parado</span></p>
+      </div>
+
+      <div id="painelDolar" class="dolar">
+        <div class="dolar-cotacao">
+          <small>💵 Dólar (USD → BRL)</small>
+          <div class="dolar-par">
+            <div><span class="dolar-rotulo">Compra</span>
+              <div id="dolarCompra" class="dolar-valor">R$ —</div></div>
+            <div><span class="dolar-rotulo">Venda</span>
+              <div id="dolarVenda" class="dolar-valor">R$ —</div></div>
+          </div>
+          <div id="dolarVar" class="dolar-var">—</div>
+          <div id="dolarHora" class="dolar-hora">consultando...</div>
+        </div>
+        <div class="dolar-alerta">
+          <small>🔔 Alerta (usa o maior: compra ou venda)</small>
+          <div class="linha">
+            <select id="alertaDirecao" aria-label="Quando avisar">
+              <option value="acima">≥ acima de</option>
+              <option value="abaixo">≤ abaixo de</option>
+            </select>
+            <input id="alertaValor" type="number" step="0.0001" min="0" placeholder="ex.: 5,50"
+                   aria-label="Valor do alerta em reais" />
+          </div>
+          <div class="botoes">
+            <button id="btnAtivarAlerta" class="principal">Ativar</button>
+            <button id="btnDesativarAlerta">Desativar</button>
+          </div>
+          <div id="alertaEstado" class="dolar-estado">alerta desligado</div>
+        </div>
+      </div>
+    </div>
   </header>
 
   <main>
@@ -564,6 +637,173 @@
     });
 
     window.addEventListener('beforeunload', () => { if (minerando) parar(true); });
+
+    // --------------------------- cotação do dólar + alerta ---------------------------
+    const URL_DOLAR = 'https://economia.awesomeapi.com.br/last/USD-BRL';
+    const INTERVALO_DOLAR = 60 * 1000;            // consulta a cada 1 minuto
+    const CHAVE_ALERTA = 'ducoAlertaDolar';
+    const formatarCotacao = (v) => `R$ ${Number(v).toLocaleString('pt-BR',
+      { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+
+    let alerta = { valor: null, direcao: 'acima', ativo: false };
+    let alertaDisparado = false;
+    let ultimaReferencia = null;
+    let somCtx = null;
+    let somTimer = null;
+    const tituloOriginal = document.title;
+
+    try { Object.assign(alerta, JSON.parse(localStorage.getItem(CHAVE_ALERTA) || '{}')); } catch { /* ok */ }
+    const salvarAlerta = () => {
+      try { localStorage.setItem(CHAVE_ALERTA, JSON.stringify(alerta)); } catch { /* aba privada */ }
+    };
+
+    function bipe() {
+      if (!somCtx) return;
+      try {
+        if (somCtx.state === 'suspended') somCtx.resume();
+        [0, 0.25, 0.5].forEach((atraso) => {
+          const osc = somCtx.createOscillator();
+          const ganho = somCtx.createGain();
+          osc.type = 'square';
+          osc.frequency.value = 880;
+          ganho.gain.value = 0.15;
+          osc.connect(ganho).connect(somCtx.destination);
+          const t0 = somCtx.currentTime + atraso;
+          osc.start(t0);
+          osc.stop(t0 + 0.18);
+        });
+      } catch { /* sem áudio */ }
+    }
+
+    function mostrarEstadoAlerta() {
+      const el = $('alertaEstado');
+      if (!alerta.ativo || !alerta.valor) {
+        el.textContent = 'alerta desligado';
+        el.style.color = 'var(--suave)';
+        return;
+      }
+      const sinal = alerta.direcao === 'acima' ? '≥' : '≤';
+      el.textContent = `🟢 ativo: avisa quando o maior valor ${sinal} ${formatarCotacao(alerta.valor)}`;
+      el.style.color = 'var(--verde)';
+    }
+
+    function dispararAlerta(referencia) {
+      alertaDisparado = true;
+      const sinal = alerta.direcao === 'acima' ? 'subiu para' : 'caiu para';
+      const texto = `🚨 DÓLAR ${sinal} ${formatarCotacao(referencia)} (alvo ${formatarCotacao(alerta.valor)})`;
+      $('faixaTexto').textContent = texto;
+      $('faixaAlerta').classList.remove('oculto');
+      $('painelDolar').classList.add('disparou');
+      registrar(texto, 'aviso');
+      bipe();
+      clearInterval(somTimer);
+      somTimer = setInterval(bipe, 4000);           // repete até dispensar
+      let alterna = false;
+      clearInterval(dispararAlerta.tituloTimer);
+      dispararAlerta.tituloTimer = setInterval(() => {
+        alterna = !alterna;
+        document.title = alterna ? `🚨 USD ${formatarCotacao(referencia)}` : tituloOriginal;
+      }, 1000);
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Alerta do dólar', { body: texto, requireInteraction: true });
+        }
+      } catch { /* sem notificação */ }
+    }
+
+    function dispensarAlerta() {
+      $('faixaAlerta').classList.add('oculto');
+      $('painelDolar').classList.remove('disparou');
+      clearInterval(somTimer);
+      clearInterval(dispararAlerta.tituloTimer);
+      document.title = tituloOriginal;
+    }
+
+    function verificarAlerta(referencia) {
+      if (!alerta.ativo || !alerta.valor || referencia === null) return;
+      const atingiu = alerta.direcao === 'acima' ? referencia >= alerta.valor : referencia <= alerta.valor;
+      if (atingiu && !alertaDisparado) dispararAlerta(referencia);
+      if (!atingiu && alertaDisparado) {             // voltou para o outro lado: rearma
+        alertaDisparado = false;
+        dispensarAlerta();
+      }
+    }
+
+    async function consultarDolar() {
+      try {
+        const { ok, status, dados } = await pedir(URL_DOLAR);
+        const c = dados && dados.USDBRL;
+        if (!ok || !c) throw new Error(`HTTP ${status}`);
+        const compra = Number(c.bid);
+        const venda = Number(c.ask);
+        const referencia = Math.max(compra, venda);  // o alerta usa o MAIOR valor
+        ultimaReferencia = referencia;
+
+        $('dolarCompra').textContent = formatarCotacao(compra);
+        $('dolarVenda').textContent = formatarCotacao(venda);
+        $('dolarCompra').classList.toggle('referencia', compra >= venda);
+        $('dolarVenda').classList.toggle('referencia', venda > compra);
+
+        const pct = Number(c.pctChange) || 0;
+        const v = $('dolarVar');
+        v.textContent = `${pct >= 0 ? '▲' : '▼'} ${pct.toFixed(2)}% no dia`
+          + ` · mín ${formatarCotacao(c.low)} · máx ${formatarCotacao(c.high)}`;
+        v.className = `dolar-var ${pct >= 0 ? 'sobe' : 'desce'}`;
+        $('dolarHora').textContent = `atualizado às ${new Date().toLocaleTimeString('pt-BR')}`
+          + ' · nova consulta a cada 1 min';
+        $('dolarHora').style.color = '';
+
+        verificarAlerta(referencia);
+      } catch (e) {
+        $('dolarHora').textContent = `falha na consulta (${e.message}) — tento de novo em 1 min`;
+        $('dolarHora').style.color = 'var(--vermelho)';
+      }
+    }
+
+    $('alertaDirecao').value = alerta.direcao;
+    if (alerta.valor) $('alertaValor').value = alerta.valor;
+
+    $('btnAtivarAlerta').addEventListener('click', () => {
+      const valor = Number(String($('alertaValor').value).replace(',', '.'));
+      if (!valor || valor <= 0) {
+        $('alertaEstado').textContent = 'digite um valor válido em reais';
+        $('alertaEstado').style.color = 'var(--vermelho)';
+        $('alertaValor').focus();
+        return;
+      }
+      // o clique libera o áudio e permite pedir permissão de notificação
+      try { somCtx = somCtx || new (window.AudioContext || window.webkitAudioContext)(); } catch { /* ok */ }
+      try {
+        if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+      } catch { /* ok */ }
+      alerta = { valor, direcao: $('alertaDirecao').value, ativo: true };
+      alertaDisparado = false;
+      dispensarAlerta();
+      salvarAlerta();
+      mostrarEstadoAlerta();
+      registrar(`Alerta do dólar ativado: ${alerta.direcao} de ${formatarCotacao(valor)}.`, 'ok');
+      verificarAlerta(ultimaReferencia);
+    });
+
+    $('btnDesativarAlerta').addEventListener('click', () => {
+      alerta.ativo = false;
+      alertaDisparado = false;
+      dispensarAlerta();
+      salvarAlerta();
+      mostrarEstadoAlerta();
+      registrar('Alerta do dólar desativado.', 'aviso');
+    });
+
+    $('btnDispensar').addEventListener('click', dispensarAlerta);
+
+    // áudio só funciona depois de uma interação: libera no primeiro clique na página
+    document.addEventListener('click', () => {
+      try { somCtx = somCtx || new (window.AudioContext || window.webkitAudioContext)(); } catch { /* ok */ }
+    }, { once: true });
+
+    mostrarEstadoAlerta();
+    consultarDolar();
+    setInterval(consultarDolar, INTERVALO_DOLAR);
 
     // --------------------------- início ---------------------------
     carregar();

@@ -141,4 +141,41 @@ carrega — e um WebSocket de teste que imita o navegador (inclusive mandando o 
   simbólica. A página **estima**, não promete.
 - 🔌 Se o Duino-Coin mudar/desligar esse gateway, a página mostra o erro e tenta reconectar a
   cada 15 s (mesmo comportamento do web miner oficial). Para usar outro endereço, basta trocar
+- 🔌 Se o Duino-Coin mudar/desligar esse gateway, a página mostra o erro e tenta reconectar a
+  cada 15 s (mesmo comportamento do web miner oficial). Para usar outro endereço, basta trocar
   o campo *Gateway WebSocket*.
+
+## Restlet do NetSuite
+
+O diretório [`restlet/`](restlet/) traz um **Restlet** (SuiteScript 2.0) com as
+funcionalidades do DUCO num único endereço do NetSuite: saldo, mineradores, transações,
+estatísticas, preço, pools, loja, autenticação, transferências, proxy genérico da API
+oficial e **busca de nonce (DUCO-S1A) dentro do NetSuite**, fatiada por tempo/unidades de
+governança para não estourar limite.
+
+```bash
+node restlet/teste-restlet.js   # 39 verificações: SHA1, nonce, roteamento, mineração
+```
+
+Veja [`restlet/README.md`](restlet/README.md) para publicar e exemplos de chamada.
+
+## Suitelet híbrido do NetSuite (nuvem + TCP no navegador)
+
+O diretório [`suitelet/`](suitelet/) traz um **Suitelet** (SuiteScript 2.1) que minera DUCO
+dividindo o trabalho: a **parte TCP** (WebSocket `wss://magi.duinocoin.com:8443`) roda **no
+navegador** (pede o job e submete o share), enquanto o **processamento do nonce** (DUCO-S1A)
+roda **na nuvem do NetSuite** via `POST acao=minerar`. A página é servida pelo próprio
+Suitelet com **Bootstrap + jQuery**, e vários trabalhadores no navegador disparam POSTs
+concorrentes (**paralelização**). É a escolha certa quando o Restlet não basta porque você
+precisa **entregar HTML** — o Restlet só fala JSON.
+
+```bash
+node suitelet/teste-suitelet.js   # 23 verificações: SHA1, página, mineração, paralelização
+```
+
+> ⚠️ Limites reais: concorrência do NetSuite (~5–20 requisições simultâneas por conta) e
+> governança do Suitelet (5.000 usage units, 300 s por execução). Some o **Kolka**, que pune
+> hashrate alto. Didático — o minerador oficial segue sendo o recomendado.
+
+Veja [`suitelet/README.md`](suitelet/README.md) para publicar e exemplos de chamada.
+
