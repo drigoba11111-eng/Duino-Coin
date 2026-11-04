@@ -729,13 +729,32 @@
       }
     }
 
+    // Reserva: quando a AwesomeAPI limita (HTTP 429 — comum em 4G, onde muita gente
+    // divide o mesmo IP), usa a cotação spot da Coinbase, que libera CORS.
+    const URL_DOLAR_RESERVA = 'https://api.coinbase.com/v2/prices/USD-BRL/spot';
+    const PAUSA_APOS_429 = 5 * 60 * 1000;          // depois de um 429, deixa a AwesomeAPI descansar
+    let awesomePausadaAte = 0;
+
+    async function buscarDolar() {
+      let motivo = 'pausada após limite';
+      if (Date.now() >= awesomePausadaAte) {
+        try {
+          const { ok, status, dados } = await pedir(URL_DOLAR);
+          const c = dados && dados.USDBRL;
+          if (ok && c) return { compra: Number(c.bid), venda: Number(c.ask), dia: c, fonte: 'AwesomeAPI' };
+          if (status === 429) awesomePausadaAte = Date.now() + PAUSA_APOS_429;
+          motivo = `HTTP ${status}`;
+        } catch (e) { motivo = e.message; }
+      }
+      const { ok, status, dados } = await pedir(URL_DOLAR_RESERVA);
+      const preco = Number(dados && dados.data && dados.data.amount);
+      if (!ok || !(preco > 0)) throw new Error(`AwesomeAPI: ${motivo}; Coinbase: HTTP ${status}`);
+      return { compra: preco, venda: preco, dia: null, fonte: 'Coinbase' };
+    }
+
     async function consultarDolar() {
       try {
-        const { ok, status, dados } = await pedir(URL_DOLAR);
-        const c = dados && dados.USDBRL;
-        if (!ok || !c) throw new Error(`HTTP ${status}`);
-        const compra = Number(c.bid);
-        const venda = Number(c.ask);
+        const { compra, venda, dia, fonte } = await buscarDolar();
         const referencia = Math.max(compra, venda);  // o alerta usa o MAIOR valor
         ultimaReferencia = referencia;
 
@@ -744,13 +763,16 @@
         $('dolarCompra').classList.toggle('referencia', compra >= venda);
         $('dolarVenda').classList.toggle('referencia', venda > compra);
 
-        const pct = Number(c.pctChange) || 0;
-        const v = $('dolarVar');
-        v.textContent = `${pct >= 0 ? '▲' : '▼'} ${pct.toFixed(2)}% no dia`
-          + ` · mín ${formatarCotacao(c.low)} · máx ${formatarCotacao(c.high)}`;
-        v.className = `dolar-var ${pct >= 0 ? 'sobe' : 'desce'}`;
+        if (dia) {                                   // a Coinbase não traz variação/mín/máx do dia
+          const pct = Number(dia.pctChange) || 0;
+          const v = $('dolarVar');
+          v.textContent = `${pct >= 0 ? '▲' : '▼'} ${pct.toFixed(2)}% no dia`
+            + ` · mín ${formatarCotacao(dia.low)} · máx ${formatarCotacao(dia.high)}`;
+          v.className = `dolar-var ${pct >= 0 ? 'sobe' : 'desce'}`;
+        }
         $('dolarHora').textContent = `atualizado às ${new Date().toLocaleTimeString('pt-BR')}`
-          + ' · nova consulta a cada 20 s';
+          + ' · nova consulta a cada 20 s'
+          + (fonte === 'Coinbase' ? ' · via Coinbase (AwesomeAPI limitou)' : '');
         $('dolarHora').style.color = '';
 
         verificarAlerta(referencia);
