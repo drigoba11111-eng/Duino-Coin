@@ -640,7 +640,7 @@
 
     // --------------------------- cotação do dólar + alerta ---------------------------
     const URL_DOLAR = 'https://economia.awesomeapi.com.br/last/USD-BRL';
-    const INTERVALO_DOLAR = 60 * 1000;            // consulta a cada 1 minuto
+    const INTERVALO_DOLAR = 20 * 1000;            // consulta a cada 20 segundos
     const CHAVE_ALERTA = 'ducoAlertaDolar';
     const formatarCotacao = (v) => `R$ ${Number(v).toLocaleString('pt-BR',
       { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
@@ -750,12 +750,12 @@
           + ` · mín ${formatarCotacao(c.low)} · máx ${formatarCotacao(c.high)}`;
         v.className = `dolar-var ${pct >= 0 ? 'sobe' : 'desce'}`;
         $('dolarHora').textContent = `atualizado às ${new Date().toLocaleTimeString('pt-BR')}`
-          + ' · nova consulta a cada 1 min';
+          + ' · nova consulta a cada 20 s';
         $('dolarHora').style.color = '';
 
         verificarAlerta(referencia);
       } catch (e) {
-        $('dolarHora').textContent = `falha na consulta (${e.message}) — tento de novo em 1 min`;
+        $('dolarHora').textContent = `falha na consulta (${e.message}) — tento de novo em 20 s`;
         $('dolarHora').style.color = 'var(--vermelho)';
       }
     }
