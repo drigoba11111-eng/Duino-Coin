@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   SafeAreaView, View, Text, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, Alert, Platform, StatusBar,
+  PushNotificationIOS,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BackgroundFetch from 'react-native-background-fetch';
@@ -19,10 +20,14 @@ export default function App() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState(null);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState('--');
+  const bgConfigurado = useRef(false);
 
   useEffect(() => {
     PushNotification.configure({
-      onNotification: (n) => n.finish(PushNotificationIOSIdle),
+      onNotification: (n) => {
+        try { n.finish(PushNotificationIOS?.FetchResult?.NoData ?? 0); }
+        catch (e) { console.log('finish err', e); }
+      },
       onRegister: (t) => console.log('TOKEN:', t),
       popInitialNotification: true,
       requestPermissions: Platform.OS === 'ios',
@@ -62,7 +67,7 @@ export default function App() {
       const c = dados && dados.USDBRL;
       if (!c) throw new Error('Dados inválidos');
 
-      const valor = Math.max(Number(c.bid), Number(c.ask));
+      const valor = Number(c.bid);
       setCotacao(valor);
       setUltimaAtualizacao(new Date().toLocaleTimeString('pt-BR', {
         hour: '2-digit', minute: '2-digit',
@@ -80,10 +85,6 @@ export default function App() {
             vibrate: true,
             importance: 'high',
           });
-          Alert.alert(
-            'Alerta do Dólar',
-            `Cotação atingiu R$ ${valor.toFixed(2)} (limite R$ ${valorLimite.toFixed(2)})`
-          );
         }
       }
     } catch (e) {
@@ -93,27 +94,30 @@ export default function App() {
     }
   }, [alertaAtivo, limite]);
 
-  const configurarAlerta = () => {
+  const configurarAlerta = async () => {
     const valorLimite = Number(String(limite).replace(',', '.'));
     if (!valorLimite || valorLimite <= 0) {
       Alert.alert('Valor inválido', 'Digite um valor maior que zero.');
       return;
     }
-    AsyncStorage.setItem(CHAVE_LIMITE, String(valorLimite));
-    AsyncStorage.setItem(CHAVE_ATIVO, 'true');
+    await AsyncStorage.setItem(CHAVE_LIMITE, String(valorLimite));
+    await AsyncStorage.setItem(CHAVE_ATIVO, 'true');
     setAlertaAtivo(true);
     Alert.alert('Alerta ativado', `Avisarei quando o dólar atingir R$ ${valorLimite.toFixed(2)}`);
   };
 
-  const desativarAlerta = () => {
-    AsyncStorage.setItem(CHAVE_ATIVO, 'false');
+  const desativarAlerta = async () => {
+    await AsyncStorage.setItem(CHAVE_ATIVO, 'false');
     setAlertaAtivo(false);
     setLimite('');
+     await pararMonitoramento();
     Alert.alert('Alerta desativado', 'Monitoramento parado.');
   };
 
   const iniciarMonitoramento = useCallback(async () => {
     try {
+      if (bgConfigurado.current) return;
+      bgConfigurado.current = true;
       await BackgroundFetch.configure({
         minimumFetchInterval: INTERVALO_MINUTOS,
         delay: 60 * 1000,
@@ -132,6 +136,7 @@ export default function App() {
 
   const pararMonitoramento = useCallback(async () => {
     try { await BackgroundFetch.stop(); } catch (e) { console.log(e); }
+     bgConfigurado.current = false;
   }, []);
 
   useEffect(() => {
@@ -260,4 +265,3 @@ const styles = StyleSheet.create({
     fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 4,
   },
 });
-
