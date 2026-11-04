@@ -1,0 +1,8 @@
+node_modules/
+.expo/
+dist/
+# gerados pelo `expo prebuild` / `expo run:android` (Continuous Native Generation)
+android/
+ios/
+*.apk
+*.aab
