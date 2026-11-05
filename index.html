@@ -61,6 +61,10 @@
              border-radius: 8px; font-size: 14px; }
     code { font-family: var(--mono); background: #0f141b; padding: 1px 5px; border-radius: 5px; }
     footer { border-top: 1px solid var(--borda); padding: 16px 24px; color: var(--suave); font-size: 13px; }
+    .cadastro-titulo { margin: 0 0 8px; font-size: 15px; color: var(--texto); }
+    .cadastro { margin: 0 0 10px; padding-left: 22px; line-height: 1.55; }
+    .cadastro li { margin-bottom: 6px; }
+    .cadastro strong { color: var(--texto); }
     .oculto { display: none; }
 
     /* ---------- cotação do dólar no cabeçalho ---------- */
@@ -243,22 +247,23 @@
   </main>
 
   <footer>
-    <p>
-      <strong>Arquivos:</strong> <code>index.html</code> (esta página) e
-      <code>trabalhador.js</code> (Web Worker que minera) — os dois precisam ficar na mesma
-      pasta para funcionar. Nada é enviado a terceiros além dos pacotes de mineração para o
-      gateway oficial do Duino-Coin e das consultas de cotação.
-    </p>
-    <p>
-      🌐 <a href="https://server.duinocoin.com/webminer.html" target="_blank" rel="noopener">Web miner oficial</a>
-      · <a href="https://wallet.duinocoin.com" target="_blank" rel="noopener">Carteira oficial</a>
-      · <a href="https://github.com/duino-coin/duino-coin" target="_blank" rel="noopener">Código-fonte do DUCO</a>
-      · <a href="https://github.com/duino-coin/duino-coin/blob/master/docs/ToS.md" target="_blank" rel="noopener">Termos de Uso</a>
-    </p>
-    <p class="mini">
-      Feito para acompanhar o guia <em>“Minerando Criptomoedas com JavaScript — Do Zero ao
-      Dinheiro na Conta”</em>. Projeto didático, sem vínculo com o projeto Duino-Coin.
-    </p>
+    <h3 class="cadastro-titulo">📝 Como se cadastrar para minerar DUCO</h3>
+    <ol class="cadastro">
+      <li>Abra o site da carteira oficial do DUCO:
+        <a href="https://wallet.duinocoin.com" target="_blank" rel="noopener">abrir a carteira oficial</a>.</li>
+      <li>Escolha a opção de criar conta (<em>Register</em>).</li>
+      <li>Preencha um <strong>nome de usuário</strong>, o seu <strong>e-mail</strong> e uma
+        <strong>senha</strong>, aceite os
+        <a href="https://github.com/duino-coin/duino-coin/blob/master/docs/ToS.md" target="_blank" rel="noopener">Termos de Uso</a>
+        e conclua o cadastro. Se chegar um e-mail de confirmação, confirme.</li>
+      <li>Entre na carteira com o usuário e a senha para conferir se a conta está funcionando.</li>
+      <li>Volte aqui, digite o mesmo nome de usuário no campo <strong>Usuário do DUCO</strong>
+        e toque em <strong>🔎 Checar conta e saldo</strong>.</li>
+      <li>Se a conta for encontrada, toque em <strong>⛏️ Iniciar mineração</strong>. O saldo
+        minerado aparece na carteira.</li>
+    </ol>
+    <p class="mini">Regras dos Termos de Uso: uma conta por pessoa, sem VPN/proxy e sem servidores
+      (VPS) gratuitos.</p>
   </footer>
 
   <script>
