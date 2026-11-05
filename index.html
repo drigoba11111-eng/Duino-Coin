@@ -80,8 +80,9 @@
     .dolar-var.sobe { color: var(--verde); } .dolar-var.desce { color: var(--vermelho); }
     .dolar-hora { font-size: 12px; color: var(--suave); }
     .dolar-alerta { border-left: 1px solid var(--borda); padding-left: 14px; }
-    .dolar-alerta .linha { display: flex; gap: 6px; margin-top: 6px; }
-    .dolar-alerta select { width: auto; padding: 8px 6px; }
+    .dolar-alerta .linha { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
+    .dolar-alerta .sinal { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--amarelo);
+             width: 1.2em; text-align: center; }
     .dolar-alerta input { font-family: var(--mono); font-size: 20px; font-weight: 700; padding: 6px 10px;
              border: 2px solid var(--amarelo); color: var(--amarelo); }
     .dolar-alerta .botoes { margin-top: 8px; }
@@ -132,12 +133,14 @@
         <div class="dolar-alerta">
           <small>🔔 Alerta (usa o maior: compra ou venda)</small>
           <div class="linha">
-            <select id="alertaDirecao" aria-label="Quando avisar">
-              <option value="acima">≥ acima de</option>
-              <option value="abaixo">≤ abaixo de</option>
-            </select>
-            <input id="alertaValor" type="number" step="0.0001" min="0" placeholder="ex.: 5,50"
-                   aria-label="Valor do alerta em reais" />
+            <label class="sinal" for="alertaAcima">≥</label>
+            <input id="alertaAcima" type="number" step="0.0001" min="0" placeholder="ex.: 5,60"
+                   aria-label="Avisar quando subir para (R$)" />
+          </div>
+          <div class="linha">
+            <label class="sinal" for="alertaAbaixo">≤</label>
+            <input id="alertaAbaixo" type="number" step="0.0001" min="0" placeholder="ex.: 5,20"
+                   aria-label="Avisar quando cair para (R$)" />
           </div>
           <div class="botoes">
             <button id="btnAtivarAlerta" class="principal">Ativar</button>
@@ -645,14 +648,27 @@
     const formatarCotacao = (v) => `R$ ${Number(v).toLocaleString('pt-BR',
       { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
 
-    let alerta = { valor: null, direcao: 'acima', ativo: false };
+    // Faixa: avisa quando o maior valor fica >= acima OU <= abaixo (qualquer um pode ficar vazio).
+    let alerta = { acima: null, abaixo: null, ativo: false };
     let alertaDisparado = false;
     let ultimaReferencia = null;
     let somCtx = null;
     let somTimer = null;
     const tituloOriginal = document.title;
 
-    try { Object.assign(alerta, JSON.parse(localStorage.getItem(CHAVE_ALERTA) || '{}')); } catch { /* ok */ }
+    try {
+      const salvo = JSON.parse(localStorage.getItem(CHAVE_ALERTA) || '{}');
+      if ('valor' in salvo) {                        // formato antigo: { valor, direcao }
+        salvo[salvo.direcao === 'abaixo' ? 'abaixo' : 'acima'] = salvo.valor;
+        delete salvo.valor; delete salvo.direcao;
+      }
+      Object.assign(alerta, salvo);
+    } catch { /* ok */ }
+    const alertaConfigurado = () => !!(alerta.acima || alerta.abaixo);
+    const descreverFaixa = () => [
+      alerta.acima ? `≥ ${formatarCotacao(alerta.acima)}` : null,
+      alerta.abaixo ? `≤ ${formatarCotacao(alerta.abaixo)}` : null,
+    ].filter(Boolean).join(' ou ');
     const salvarAlerta = () => {
       try { localStorage.setItem(CHAVE_ALERTA, JSON.stringify(alerta)); } catch { /* aba privada */ }
     };
@@ -677,20 +693,20 @@
 
     function mostrarEstadoAlerta() {
       const el = $('alertaEstado');
-      if (!alerta.ativo || !alerta.valor) {
+      if (!alerta.ativo || !alertaConfigurado()) {
         el.textContent = 'alerta desligado';
         el.style.color = 'var(--suave)';
         return;
       }
-      const sinal = alerta.direcao === 'acima' ? '≥' : '≤';
-      el.textContent = `🟢 ativo: avisa quando o maior valor ${sinal} ${formatarCotacao(alerta.valor)}`;
+      el.textContent = `🟢 ativo: avisa quando o maior valor ${descreverFaixa()}`;
       el.style.color = 'var(--verde)';
     }
 
     function dispararAlerta(referencia) {
       alertaDisparado = true;
-      const sinal = alerta.direcao === 'acima' ? 'subiu para' : 'caiu para';
-      const texto = `🚨 DÓLAR ${sinal} ${formatarCotacao(referencia)} (alvo ${formatarCotacao(alerta.valor)})`;
+      const subiu = alerta.acima && referencia >= alerta.acima;
+      const alvo = subiu ? `≥ ${formatarCotacao(alerta.acima)}` : `≤ ${formatarCotacao(alerta.abaixo)}`;
+      const texto = `🚨 DÓLAR ${subiu ? 'subiu para' : 'caiu para'} ${formatarCotacao(referencia)} (alvo ${alvo})`;
       $('faixaTexto').textContent = texto;
       $('faixaAlerta').classList.remove('oculto');
       $('painelDolar').classList.add('disparou');
@@ -720,10 +736,11 @@
     }
 
     function verificarAlerta(referencia) {
-      if (!alerta.ativo || !alerta.valor || referencia === null) return;
-      const atingiu = alerta.direcao === 'acima' ? referencia >= alerta.valor : referencia <= alerta.valor;
+      if (!alerta.ativo || !alertaConfigurado() || referencia === null) return;
+      const atingiu = (!!alerta.acima && referencia >= alerta.acima)
+                   || (!!alerta.abaixo && referencia <= alerta.abaixo);
       if (atingiu && !alertaDisparado) dispararAlerta(referencia);
-      if (!atingiu && alertaDisparado) {             // voltou para o outro lado: rearma
+      if (!atingiu && alertaDisparado) {             // voltou para dentro da faixa: rearma
         alertaDisparado = false;
         dispensarAlerta();
       }
@@ -782,28 +799,44 @@
       }
     }
 
-    $('alertaDirecao').value = alerta.direcao;
-    if (alerta.valor) $('alertaValor').value = alerta.valor;
+    if (alerta.acima) $('alertaAcima').value = alerta.acima;
+    if (alerta.abaixo) $('alertaAbaixo').value = alerta.abaixo;
+
+    // '' -> null (campo vazio); NaN se inválido
+    const lerCampo = (id) => {
+      const t = String($(id).value).trim();
+      if (!t) return null;
+      const v = Number(t.replace(',', '.'));
+      return Number.isFinite(v) && v > 0 ? v : NaN;
+    };
+    const erroAlerta = (msg, id) => {
+      $('alertaEstado').textContent = msg;
+      $('alertaEstado').style.color = 'var(--vermelho)';
+      $(id).focus();
+    };
 
     $('btnAtivarAlerta').addEventListener('click', () => {
-      const valor = Number(String($('alertaValor').value).replace(',', '.'));
-      if (!valor || valor <= 0) {
-        $('alertaEstado').textContent = 'digite um valor válido em reais';
-        $('alertaEstado').style.color = 'var(--vermelho)';
-        $('alertaValor').focus();
-        return;
+      const acima = lerCampo('alertaAcima');
+      const abaixo = lerCampo('alertaAbaixo');
+      if (Number.isNaN(acima)) return erroAlerta('valor de "≥" inválido', 'alertaAcima');
+      if (Number.isNaN(abaixo)) return erroAlerta('valor de "≤" inválido', 'alertaAbaixo');
+      if (acima === null && abaixo === null) {
+        return erroAlerta('preencha pelo menos um dos valores (≥ ou ≤)', 'alertaAcima');
+      }
+      if (acima !== null && abaixo !== null && abaixo >= acima) {
+        return erroAlerta('o valor de "≤" precisa ser menor que o de "≥"', 'alertaAbaixo');
       }
       // o clique libera o áudio e permite pedir permissão de notificação
       try { somCtx = somCtx || new (window.AudioContext || window.webkitAudioContext)(); } catch { /* ok */ }
       try {
         if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
       } catch { /* ok */ }
-      alerta = { valor, direcao: $('alertaDirecao').value, ativo: true };
+      alerta = { acima, abaixo, ativo: true };
       alertaDisparado = false;
       dispensarAlerta();
       salvarAlerta();
       mostrarEstadoAlerta();
-      registrar(`Alerta do dólar ativado: ${alerta.direcao} de ${formatarCotacao(valor)}.`, 'ok');
+      registrar(`Alerta do dólar ativado: avisa quando ${descreverFaixa()}.`, 'ok');
       verificarAlerta(ultimaReferencia);
     });
 
